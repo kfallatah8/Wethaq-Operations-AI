@@ -64,6 +64,9 @@ const analysisSchema = {
   }
 };
 
+// Paste your Gemini API key inside the quotes below if Vercel requires a paid plan for environment variables
+const DEFAULT_GEMINI_API_KEY = "";
+
 const getApiKey = (): string => {
   if (typeof process !== 'undefined' && process.env) {
     if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
@@ -74,7 +77,7 @@ const getApiKey = (): string => {
     if (metaEnv.VITE_GEMINI_API_KEY) return metaEnv.VITE_GEMINI_API_KEY;
     if (metaEnv.GEMINI_API_KEY) return metaEnv.GEMINI_API_KEY;
   }
-  return '';
+  return DEFAULT_GEMINI_API_KEY;
 };
 
 const KNOWN_SHORTLINKS: Record<string, { url: string; name: string; city: string; rating: number; reviews: number }> = {
