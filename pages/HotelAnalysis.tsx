@@ -101,15 +101,27 @@ const HotelAnalysis: React.FC = () => {
     } : undefined;
 
     try {
-      const aiData = await generateHotelAnalysis(baseDetails.name, url, manualData);
+      const aiData = await generateHotelAnalysis(hotelName, url, manualData);
 
       if (aiData && aiData.swot) {
+        const resolvedHotel: HotelDetails = {
+          name: aiData.hotelDetails?.name || baseDetails.name,
+          address: aiData.hotelDetails?.address || baseDetails.address,
+          rating: aiData.hotelDetails?.rating || baseDetails.rating,
+          totalReviews: aiData.hotelDetails?.totalReviews || baseDetails.totalReviews,
+          priceRange: aiData.hotelDetails?.priceRange || baseDetails.priceRange,
+          amenities: (aiData.hotelDetails?.amenities && aiData.hotelDetails.amenities.length > 0) 
+            ? aiData.hotelDetails.amenities 
+            : baseDetails.amenities,
+          imageUrl: baseDetails.imageUrl
+        };
+
         setCurrentAnalysis({
-            hotel: baseDetails,
+            hotel: resolvedHotel,
             swot: aiData.swot,
             competitors: aiData.competitors?.map((c: any, idx: number) => ({
                 ...c,
-                address: `${manualCity} District`,
+                address: `${resolvedHotel.address.split(',')[0]} District`,
                 totalReviews: Math.floor(Math.random() * 400) + 100,
                 amenities: ["WiFi", "Pool", "Gym"],
                 imageUrl: hotelImages[idx % hotelImages.length]
