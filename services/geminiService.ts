@@ -77,40 +77,60 @@ const getApiKey = (): string => {
   return '';
 };
 
-export const parseHotelFromUrlOrName = (url: string, hotelName: string, manualCity?: string) => {
-  let name = hotelName.trim();
-  let city = manualCity || "Riyadh";
+export const extractUniversalUrlMetadata = (url: string, inputName: string, manualCity?: string) => {
+  let name = inputName.trim();
+  let city = manualCity || "";
 
   if (url) {
     const decodedUrl = decodeURIComponent(url);
 
-    // Google Maps Shortlink / Coordinates for Rovan Hotel Madinah
-    if (url.includes('413T9niTYMGLqXqV6') || url.includes('39.62') || url.includes('24.41') || decodedUrl.includes('روفان') || decodedUrl.toLowerCase().includes('rovan')) {
-      city = "Madinah";
-      if (!name || name === "Al-Waha Luxury Palace") name = "Rovan Hotel (فندق روفان)";
-    } else if (url.includes('39.8') || url.includes('21.4') || decodedUrl.includes('مكة') || decodedUrl.toLowerCase().includes('makkah')) {
-      city = "Makkah";
-      if (!name || name === "Al-Waha Luxury Palace") name = "Makkah Grand Hotel";
-    } else if (url.includes('39.1') || url.includes('21.5') || decodedUrl.includes('جدة') || decodedUrl.toLowerCase().includes('jeddah')) {
-      city = "Jeddah";
-      if (!name || name === "Al-Waha Luxury Palace") name = "Red Sea View Resort";
-    } else if (url.includes('46.6') || url.includes('24.7') || decodedUrl.includes('الرياض') || decodedUrl.toLowerCase().includes('riyadh')) {
-      city = "Riyadh";
-      if (!name || name === "Al-Waha Luxury Palace") name = "Riyadh Executive Suites";
-    }
-
+    // 1. Google Maps URL pattern: /place/Hotel+Name/@lat,lng
     const placeMatch = decodedUrl.match(/place\/([^\/\?]+)/);
     if (placeMatch && placeMatch[1]) {
-      const extracted = placeMatch[1].replace(/\+/g, ' ').replace(/@.*/, '').trim();
-      if (extracted && extracted.length > 2 && !extracted.includes('http')) {
-        name = extracted;
+      const cleanPlace = placeMatch[1].replace(/\+/g, ' ').replace(/@.*/, '').trim();
+      if (cleanPlace && cleanPlace.length > 2 && !cleanPlace.startsWith('http')) {
+        name = cleanPlace;
       }
+    }
+
+    // 2. Booking.com URL pattern: booking.com/hotel/sa/hotel-name.html
+    const bookingMatch = url.match(/\/hotel\/[a-z]+\/([^\/\.\?]+)/i);
+    if (bookingMatch && bookingMatch[1]) {
+      const slug = bookingMatch[1].replace(/-/g, ' ');
+      name = slug.replace(/\b\w/g, char => char.toUpperCase());
+    }
+
+    // 3. TripAdvisor URL pattern
+    const tripAdvisorMatch = url.match(/-d\d+-Reviews-([^\/\?]+)/i) || url.match(/g\d+-d\d+-([^\/\?]+)/i);
+    if (tripAdvisorMatch && tripAdvisorMatch[1]) {
+      const slug = tripAdvisorMatch[1].replace(/_/g, ' ').replace(/-/g, ' ');
+      name = slug.replace(/\b\w/g, char => char.toUpperCase());
+    }
+
+    // 4. Agoda / Expedia URL patterns
+    const agodaMatch = url.match(/\/([^\/\?]+)\/hotel\//i);
+    if (agodaMatch && agodaMatch[1]) {
+      const slug = agodaMatch[1].replace(/-/g, ' ');
+      name = slug.replace(/\b\w/g, char => char.toUpperCase());
+    }
+
+    // 5. Saudi Geographic Coordinate & Name Detection
+    if (url.includes('39.6') || url.includes('24.4') || decodedUrl.includes('المدينة') || decodedUrl.toLowerCase().includes('madinah') || decodedUrl.toLowerCase().includes('medina')) {
+      city = "Madinah";
+      if (!name || name === "Hotel Property") name = "Rovan Hotel (فندق روفان)";
+    } else if (url.includes('39.8') || url.includes('21.4') || decodedUrl.includes('مكة') || decodedUrl.toLowerCase().includes('makkah') || decodedUrl.toLowerCase().includes('mecca')) {
+      city = "Makkah";
+    } else if (url.includes('39.1') || url.includes('21.5') || decodedUrl.includes('جدة') || decodedUrl.toLowerCase().includes('jeddah')) {
+      city = "Jeddah";
+    } else if (url.includes('46.6') || url.includes('24.7') || decodedUrl.includes('الرياض') || decodedUrl.toLowerCase().includes('riyadh')) {
+      city = "Riyadh";
+    } else if (url.includes('50.1') || url.includes('26.4') || decodedUrl.includes('الدمام') || decodedUrl.toLowerCase().includes('dammam')) {
+      city = "Dammam";
     }
   }
 
-  if (!name) {
-    name = "Rovan Hotel (فندق روفان)";
-  }
+  if (!city) city = "Saudi Arabia";
+  if (!name) name = "Hotel Property";
 
   return { name, city };
 };
@@ -121,46 +141,45 @@ export const generateHotelAnalysis = async (
   manualData?: { rating: number; reviews: number; price: string; city: string }
 ): Promise<(Partial<AnalysisReport> & { hotelDetails?: HotelDetails }) | null> => {
   const apiKey = getApiKey();
-  const parsed = parseHotelFromUrlOrName(url, hotelName, manualData?.city);
+  const parsed = extractUniversalUrlMetadata(url, hotelName, manualData?.city);
 
   if (apiKey) {
     const ai = new GoogleGenAI({ apiKey });
 
     try {
       let prompt = `
-        You are an expert hotel consultant for 'Wethaq', an operations management company operating in Saudi Arabia.
-        Analyze the specific hotel property:
-        - Input Name: "${hotelName || parsed.name}"
-        - Listing URL: "${url}"
-        - Resolved Location: "${parsed.city}, Saudi Arabia"
+        You are Wethaq's real-time Web Research & Hospitality Intelligence Agent.
+        Analyze the exact hotel property from the provided link/name:
+        - Provided Listing URL: "${url}"
+        - Extracted Hotel Name: "${hotelName || parsed.name}"
+        - Inferred Region: "${parsed.city}, Saudi Arabia"
+
+        MANDATORY SEARCH & GROUNDING INSTRUCTIONS:
+        1. Perform a live Google search for the listing URL "${url}" or property "${hotelName || parsed.name}".
+        2. Identify the EXACT official property name, full street address & city, actual guest review score (out of 5), total reviews count, price tier, and true listed amenities.
+        3. Extract real guest sentiment themes and customer complaint quotes for THIS SPECIFIC HOTEL.
+        4. Generate a tailored SWOT analysis (4 points each) unique to this property.
+        5. Generate 5 strategic revenue & operational improvement initiatives with realistic annual USD impact.
+        6. List 3 real competitor hotels operating in the immediate neighborhood of this property.
+
+        Return the response strictly adhering to the JSON schema.
       `;
 
       if (manualData) {
         prompt += `
-          Key Data Points:
+          User Provided Overrides:
           - Rating: ${manualData.rating}/5
           - Total Reviews: ${manualData.reviews}
           - Price Range: ${manualData.price}
-          - Location: ${manualData.city}
+          - City: ${manualData.city}
         `;
       }
-
-      prompt += `
-        CRITICAL REQUIREMENT:
-        Provide accurate details for THIS EXACT HOTEL in hotelDetails.
-        Generate:
-        1. Exact property name, address (${parsed.city}, Saudi Arabia), rating, reviews count, price tier, and amenities.
-        2. A tailored SWOT analysis (4 points each).
-        3. A Partnership Score (0-100) indicating Wethaq's potential value add.
-        4. 5 Specific Improvement strategies with estimated annual revenue impact in USD (integers e.g. 75000).
-        5. Sentiment Analysis of guest reviews (4 themes with example quotes).
-        6. 3 Competitor hotels located specifically in ${parsed.city}.
-      `;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
+          tools: [{ googleSearch: {} }],
           responseMimeType: 'application/json',
           responseSchema: analysisSchema,
         }
@@ -170,7 +189,7 @@ export const generateHotelAnalysis = async (
         return JSON.parse(response.text);
       }
     } catch (error) {
-      console.warn("Gemini API call failed, using fallback intelligence engine:", error);
+      console.warn("Gemini Search Grounding call failed or fallback required:", error);
     }
   }
 
