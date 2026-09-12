@@ -65,7 +65,7 @@ const analysisSchema = {
 };
 
 // Paste your Gemini API key inside the quotes below if Vercel requires a paid plan for environment variables
-const DEFAULT_GEMINI_API_KEY = "";
+const DEFAULT_GEMINI_API_KEY = "AQ.Ab8RN6JVy8E_h7aIPwATQp_Oe3o9iw8glyqrwBZsSCDIuzADOg";
 
 const getApiKey = (): string => {
   if (typeof process !== 'undefined' && process.env) {
