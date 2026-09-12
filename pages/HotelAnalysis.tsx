@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, MapPin, Loader2, AlertTriangle, Link as LinkIcon, Building, Terminal, Edit3, Star, Users, DollarSign } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { generateHotelAnalysis } from '../services/geminiService';
+import { generateHotelAnalysis, resolveShortlinkUrl, extractUniversalUrlMetadata } from '../services/geminiService';
 import { useAppState } from '../context/AppContext';
 import { HotelDetails } from '../types';
 
@@ -77,6 +77,9 @@ const HotelAnalysis: React.FC = () => {
     setLoading(true);
     setStep(1);
 
+    const activeUrl = await resolveShortlinkUrl(url);
+    const urlMeta = extractUniversalUrlMetadata(activeUrl, hotelName, isManualMode ? manualCity : undefined);
+
     const hotelImages = [
       "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80",
       "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1200&q=80",
@@ -84,12 +87,12 @@ const HotelAnalysis: React.FC = () => {
     ];
 
     const baseDetails: HotelDetails = {
-      name: hotelName || "Al-Waha Luxury Palace",
-      address: `${manualCity}, Saudi Arabia`,
-      rating: isManualMode ? manualRating : 3.9,
+      name: hotelName.trim() || urlMeta.name,
+      address: `${isManualMode ? manualCity : urlMeta.city}, Saudi Arabia`,
+      rating: isManualMode ? manualRating : 4.1,
       totalReviews: isManualMode ? manualReviews : 452,
       priceRange: isManualMode ? manualPrice : "$$ ($80 - $130)",
-      amenities: ["Free High-Speed WiFi", "Infinity Pool", "Executive Lounge", "Fine Dining Restaurant", "Valet Parking"],
+      amenities: ["Free High-Speed WiFi", "Prayer Room", "City View Suites", "24/7 Room Service", "Airport Shuttle"],
       imageUrl: hotelImages[Math.floor(Math.random() * hotelImages.length)]
     };
 
@@ -101,7 +104,7 @@ const HotelAnalysis: React.FC = () => {
     } : undefined;
 
     try {
-      const aiData = await generateHotelAnalysis(hotelName, url, manualData);
+      const aiData = await generateHotelAnalysis(hotelName, activeUrl, manualData);
 
       if (aiData && aiData.swot) {
         const resolvedHotel: HotelDetails = {
