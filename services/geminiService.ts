@@ -64,7 +64,8 @@ const analysisSchema = {
   }
 };
 
-// Paste your Gemini API key inside the quotes below if Vercel requires a paid plan for environment variables
+// Paste your API key inside the quotes below if Vercel requires a paid plan for environment variables
+// Supports: Google Gemini (AIzaSy...), OpenRouter (sk-or-v1-...), Groq (gsk_...), OpenAI (sk-...)
 const DEFAULT_GEMINI_API_KEY = "";
 
 const getApiKey = (): string => {
@@ -84,12 +85,7 @@ const getApiKey = (): string => {
     key = DEFAULT_GEMINI_API_KEY;
   }
 
-  if (key && !key.startsWith('AIzaSy')) {
-    console.warn("Invalid Gemini API key format (must start with 'AIzaSy'). Using Wethaq Intelligence Engine fallback.");
-    return '';
-  }
-
-  return key;
+  return key.trim();
 };
 
 const KNOWN_SHORTLINKS: Record<string, { url: string; name: string; city: string; rating: number; reviews: number }> = {
@@ -231,8 +227,6 @@ export const generateHotelAnalysis = async (
   const parsed = extractUniversalUrlMetadata(activeUrl, hotelName, manualData?.city);
 
   if (apiKey) {
-    const ai = new GoogleGenAI({ apiKey });
-
     try {
       let prompt = `
         You are Wethaq's real-time Web Research & Hospitality Intelligence Agent.
@@ -251,7 +245,15 @@ export const generateHotelAnalysis = async (
         6. Provide real guest rating out of 5, total review count, price tier, and true listed amenities.
         7. Generate a tailored SWOT analysis (4 points each), Partnership Score (0-100), 5 Strategic Revenue & Operational Improvements with realistic USD impact, Review Sentiment Analysis (4 themes with real quotes), and 3 Real Competitor hotels operating in ${parsed.city}.
 
-        Return the response strictly adhering to the JSON schema.
+        Return ONLY a JSON object matching this structure:
+        {
+          "hotelDetails": { "name": "...", "address": "...", "rating": 4.5, "totalReviews": 500, "priceRange": "$$ ($80 - $130)", "amenities": ["WiFi", "Pool"] },
+          "partnershipScore": 85,
+          "swot": { "strengths": [...], "weaknesses": [...], "opportunities": [...], "threats": [...] },
+          "improvements": [{ "category": "Revenue", "title": "...", "description": "...", "impactScore": 9, "estimatedRevenue": 100000 }],
+          "sentimentAnalysis": [{ "theme": "...", "count": 20, "sentiment": "positive", "example": "..." }],
+          "competitors": [{ "name": "...", "rating": 4.4, "priceRange": "$$" }]
+        }
       `;
 
       if (manualData) {
@@ -264,23 +266,58 @@ export const generateHotelAnalysis = async (
         `;
       }
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: analysisSchema,
-        }
-      });
+      if (apiKey.startsWith('AIzaSy')) {
+        const ai = new GoogleGenAI({ apiKey });
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: analysisSchema,
+          }
+        });
 
-      if (response.text) {
-        const parsedReport = JSON.parse(response.text);
-        if (parsedReport && parsedReport.swot) {
-          return parsedReport;
+        if (response.text) {
+          const parsedReport = JSON.parse(response.text);
+          if (parsedReport && parsedReport.swot) return parsedReport;
+        }
+      } else if (apiKey.startsWith('sk-or-') || apiKey.startsWith('gsk_') || apiKey.startsWith('sk-')) {
+        const endpoint = apiKey.startsWith('sk-or-') 
+          ? 'https://openrouter.ai/api/v1/chat/completions'
+          : apiKey.startsWith('gsk_')
+          ? 'https://api.groq.com/openai/v1/chat/completions'
+          : 'https://api.openai.com/v1/chat/completions';
+
+        const modelName = apiKey.startsWith('sk-or-') 
+          ? 'google/gemini-2.5-flash' 
+          : apiKey.startsWith('gsk_')
+          ? 'llama-3.3-70b-versatile'
+          : 'gpt-4o-mini';
+
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: modelName,
+            messages: [{ role: 'user', content: prompt }],
+            response_format: { type: 'json_object' }
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const jsonText = data?.choices?.[0]?.message?.content;
+          if (jsonText) {
+            const parsedReport = JSON.parse(jsonText);
+            if (parsedReport && parsedReport.swot) return parsedReport;
+          }
         }
       }
     } catch (error) {
-      console.warn("Gemini API call warning, using fallback intelligence engine:", error);
+      console.warn("AI API call error, using Wethaq Intelligence Engine fallback:", error);
     }
   }
 
