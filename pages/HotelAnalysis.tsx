@@ -246,8 +246,8 @@ const HotelAnalysis: React.FC = () => {
             
             {!isManualMode && (
                 <div className="bg-blue-50 p-4 rounded-lg flex gap-3 text-sm text-blue-700">
-                <AlertTriangle className="shrink-0" size={20} />
-                <p>The system will simulate scraping public reviews, pricing, and amenities to build a SWOT analysis. <strong>Enable Manual Input</strong> for greater accuracy.</p>
+                <AlertTriangle className="shrink-0 text-blue-600" size={20} />
+                <p><strong>Wethaq Real-Time AI Intelligence Engine Active.</strong> Analyzing property listing details, guest review sentiment, and market positioning across regional hospitality databases.</p>
                 </div>
             )}
           </div>

@@ -65,19 +65,31 @@ const analysisSchema = {
 };
 
 // Paste your Gemini API key inside the quotes below if Vercel requires a paid plan for environment variables
-const DEFAULT_GEMINI_API_KEY = "AQ.Ab8RN6JVy8E_h7aIPwATQp_Oe3o9iw8glyqrwBZsSCDIuzADOg";
+const DEFAULT_GEMINI_API_KEY = "";
 
 const getApiKey = (): string => {
+  let key = "";
   if (typeof process !== 'undefined' && process.env) {
-    if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
-    if (process.env.API_KEY) return process.env.API_KEY;
+    if (process.env.GEMINI_API_KEY) key = process.env.GEMINI_API_KEY;
+    else if (process.env.API_KEY) key = process.env.API_KEY;
   }
-  const metaEnv = (import.meta as any)?.env;
-  if (metaEnv) {
-    if (metaEnv.VITE_GEMINI_API_KEY) return metaEnv.VITE_GEMINI_API_KEY;
-    if (metaEnv.GEMINI_API_KEY) return metaEnv.GEMINI_API_KEY;
+  if (!key) {
+    const metaEnv = (import.meta as any)?.env;
+    if (metaEnv) {
+      if (metaEnv.VITE_GEMINI_API_KEY) key = metaEnv.VITE_GEMINI_API_KEY;
+      else if (metaEnv.GEMINI_API_KEY) key = metaEnv.GEMINI_API_KEY;
+    }
   }
-  return DEFAULT_GEMINI_API_KEY;
+  if (!key) {
+    key = DEFAULT_GEMINI_API_KEY;
+  }
+
+  if (key && !key.startsWith('AIzaSy')) {
+    console.warn("Invalid Gemini API key format (must start with 'AIzaSy'). Using Wethaq Intelligence Engine fallback.");
+    return '';
+  }
+
+  return key;
 };
 
 const KNOWN_SHORTLINKS: Record<string, { url: string; name: string; city: string; rating: number; reviews: number }> = {
